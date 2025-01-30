@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
+// import Image from 'next/image';
 import { Footer } from './Footer';
 import { Github, Linkedin, Mail, Music, Sun, Moon, Menu, X } from 'lucide-react';
 import Link from 'next/link';

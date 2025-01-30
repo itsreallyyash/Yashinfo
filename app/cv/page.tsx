@@ -2,7 +2,7 @@
 
 import { CV } from '../../components/CV';
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+// import { useRouter } from 'next/navigation';
 
 export default function CVPage() {
   const router = useRouter();
