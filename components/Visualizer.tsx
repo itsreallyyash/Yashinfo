@@ -1,9 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Play, Pause, SkipForward } from 'lucide-react';
 import { getRandomSong } from '../utils/songs';
 import { createVisualizer } from '../utils/music';
+
+// Extend the Window interface to include webkitAudioContext
+declare global {
+  interface Window {
+    webkitAudioContext?: typeof AudioContext;
+  }
+}
 
 interface VisualizerProps {
   onClose: () => void;
@@ -19,8 +26,13 @@ export function Visualizer({ onClose }: VisualizerProps) {
 
   // Initialize AudioContext
   useEffect(() => {
-    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    
+    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextConstructor) {
+      audioContextRef.current = new AudioContextConstructor();
+    } else {
+      console.error('Web Audio API is not supported in this browser.');
+    }
+
     // Clean up on unmount
     return () => {
       if (audioContextRef.current) {
@@ -29,9 +41,32 @@ export function Visualizer({ onClose }: VisualizerProps) {
       // Pause and reset audio when the visualizer is closed
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current.currentTime = 0;  // Reset to the start
+        audioRef.current.currentTime = 0; // Reset to the start
       }
     };
+  }, []);
+
+  // Define event handlers outside useEffect to maintain stable references
+  const handleEnded = useCallback(() => {
+    setIsPlaying(false);
+  }, []);
+
+  const playAudio = useCallback(async () => {
+    try {
+      if (audioRef.current && audioContextRef.current) {
+        // Resume AudioContext if it's suspended
+        if (audioContextRef.current.state === 'suspended') {
+          await audioContextRef.current.resume();
+        }
+
+        await audioRef.current.play();
+        setIsPlaying(true);
+        console.log('Audio playback started successfully');
+      }
+    } catch (error) {
+      console.error('Audio playback failed:', error);
+      setIsPlaying(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -51,44 +86,28 @@ export function Visualizer({ onClose }: VisualizerProps) {
     const cleanup = createVisualizer(audioRef.current, canvasRef.current);
     cleanupRef.current = cleanup;
 
-    const playAudio = async () => {
-      try {
-        if (audioRef.current) {
-          // Resume AudioContext before playing
-          if (audioContextRef.current?.state === 'suspended') {
-            await audioContextRef.current.resume();
-          }
-
-          await audioRef.current.play();
-          setIsPlaying(true);
-          console.log('Audio playback started successfully');
-        }
-      } catch (error) {
-        console.error('Audio playback failed:', error);
-        setIsPlaying(false);
-      }
-    };
-
     // Add event listeners
-    audioRef.current.addEventListener('canplay', playAudio);
-    audioRef.current.addEventListener('ended', () => setIsPlaying(false));
+    const audioElement = audioRef.current;
+    audioElement.addEventListener('canplay', playAudio);
+    audioElement.addEventListener('ended', handleEnded);
 
     // Load the audio only when song changes
-    audioRef.current.src = currentSong.url;
-    audioRef.current.load(); // To reload the audio source
+    audioElement.src = currentSong.url;
+    audioElement.load(); // To reload the audio source
+
+    // Capture the current audioRef for cleanup
+    const currentAudio = audioElement;
 
     return () => {
-      if (audioRef.current) {
-        audioRef.current.removeEventListener('canplay', playAudio);
-        audioRef.current.removeEventListener('ended', () => setIsPlaying(false));
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
+      currentAudio.removeEventListener('canplay', playAudio);
+      currentAudio.removeEventListener('ended', handleEnded);
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
       if (cleanupRef.current) {
         cleanupRef.current();
       }
     };
-  }, [currentSong.url]);
+  }, [currentSong.url, playAudio, handleEnded]);
 
   const handlePlayPause = async () => {
     if (!audioRef.current || !audioContextRef.current) return;
@@ -127,7 +146,7 @@ export function Visualizer({ onClose }: VisualizerProps) {
             // Manually stop the audio when closing the visualizer
             if (audioRef.current) {
               audioRef.current.pause();
-              audioRef.current.currentTime = 0;  // Reset to the start
+              audioRef.current.currentTime = 0; // Reset to the start
             }
           }}
           className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
