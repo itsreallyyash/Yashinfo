@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 // import { useRouter } from 'next/navigation';
 
 export default function CVPage() {
-  const router = useRouter();
+  // const router = useRouter();
 
   useEffect(() => {
     const handleBeforeUnload = () => {
